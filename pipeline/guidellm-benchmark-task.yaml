@@ -76,14 +76,17 @@ spec:
 
         export REQUESTS_CA_BUNDLE="/etc/ssl/certs/ca-bundle.crt"
 
-        echo "--- Installing guidellm ---"
-        pip -q install git+https://github.com/jhurlocker/guidellm.git
+        echo "--- Installing latest guidellm from PyPI ---"
+        pip -q install guidellm
 
         # Create timestamped directory
         TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 
         echo "--- Starting benchmark ---"
-        
+
+        # Base filename without extension
+        BASE_OUTPUT="$(workspaces.shared-workspace.path)/$(params.model-name)-benchmark-${TIMESTAMP}"
+
         # Check if the rate-type parameter is equal to "throughput"
         if [ "$(params.rate-type)" == "throughput" ]; then
           # If it is "throughput", run the command WITHOUT the --rate argument
@@ -93,21 +96,72 @@ spec:
             --model="$(params.model-name)" \
             --processor="$(params.processor)" \
             --data="$(params.data-config)" \
-            --output-path="$(workspaces.shared-workspace.path)/$(params.output-filename)" \
+            --output-path="${BASE_OUTPUT}.yaml" \
             --rate-type="$(params.rate-type)" \
             --max-seconds="$(params.max-seconds)" > benchmark_${TIMESTAMP}.txt
-        else
-          # If it is anything else, run the command WITH the --rate argument
-          #echo "Rate type is '$(params.rate-type)', running with --rate flag."
+
+          # Generate HTML report
+          echo "Generating HTML report..."
           COLUMNS=500 guidellm benchmark \
             --target="$(params.target)" \
             --model="$(params.model-name)" \
             --processor="$(params.processor)" \
             --data="$(params.data-config)" \
-            --output-path="$(workspaces.shared-workspace.path)/$(params.output-filename)" \
+            --output-path="${BASE_OUTPUT}.html" \
+            --rate-type="$(params.rate-type)" \
+            --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "HTML generation not supported"
+
+          # Generate JSON report
+          echo "Generating JSON report..."
+          COLUMNS=500 guidellm benchmark \
+            --target="$(params.target)" \
+            --model="$(params.model-name)" \
+            --processor="$(params.processor)" \
+            --data="$(params.data-config)" \
+            --output-path="${BASE_OUTPUT}.json" \
+            --rate-type="$(params.rate-type)" \
+            --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "JSON generation not supported"
+        else
+          # If it is anything else, run the command WITH the --rate argument
+          echo "Rate type is '$(params.rate-type)', running with --rate flag."
+          COLUMNS=500 guidellm benchmark \
+            --target="$(params.target)" \
+            --model="$(params.model-name)" \
+            --processor="$(params.processor)" \
+            --data="$(params.data-config)" \
+            --output-path="${BASE_OUTPUT}.yaml" \
             --rate-type="$(params.rate-type)" \
             --rate="$(params.rate)" \
             --max-seconds="$(params.max-seconds)" > benchmark_${TIMESTAMP}.txt
+
+          # Generate HTML report
+          echo "Generating HTML report..."
+          COLUMNS=500 guidellm benchmark \
+            --target="$(params.target)" \
+            --model="$(params.model-name)" \
+            --processor="$(params.processor)" \
+            --data="$(params.data-config)" \
+            --output-path="${BASE_OUTPUT}.html" \
+            --rate-type="$(params.rate-type)" \
+            --rate="$(params.rate)" \
+            --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "HTML generation not supported"
+
+          # Generate JSON report
+          echo "Generating JSON report..."
+          COLUMNS=500 guidellm benchmark \
+            --target="$(params.target)" \
+            --model="$(params.model-name)" \
+            --processor="$(params.processor)" \
+            --data="$(params.data-config)" \
+            --output-path="${BASE_OUTPUT}.json" \
+            --rate-type="$(params.rate-type)" \
+            --rate="$(params.rate)" \
+            --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "JSON generation not supported"
+        fi
+
+        # Also copy the original output filename for backwards compatibility
+        if [ -f "${BASE_OUTPUT}.yaml" ]; then
+          cp "${BASE_OUTPUT}.yaml" "$(workspaces.shared-workspace.path)/$(params.output-filename)"
         fi
         # --- End of Conditional Logic ---
 
@@ -116,12 +170,61 @@ spec:
         RESULT_DIR="$(params.model-name)_${TIMESTAMP}"
         mkdir -p $RESULT_DIR
 
-        # Copy and organize results
+        # List all files in workspace to see what was generated
+        echo "Files in workspace after benchmark:"
+        ls -la
+
+        # Copy all benchmark result files (YAML, HTML, JSON, etc.)
+        echo "Copying all benchmark output files..."
+
+        # Copy the main output file if it exists
         if [ -f "$(params.output-filename)" ]; then
           cp "$(params.output-filename)" "$RESULT_DIR/"
-          
-          # Create summary info
-          cat > "$RESULT_DIR/benchmark_info.txt" << EOF
+          echo "Copied $(params.output-filename)"
+        fi
+
+        # Copy timestamped benchmark files
+        if ls $(params.model-name)-benchmark-*.yaml 1> /dev/null 2>&1; then
+          cp $(params.model-name)-benchmark-*.yaml "$RESULT_DIR/" 2>/dev/null || true
+          echo "Copied YAML benchmark files"
+        fi
+
+        # Copy any HTML files generated
+        if ls *.html 1> /dev/null 2>&1; then
+          cp *.html "$RESULT_DIR/"
+          echo "Copied HTML files: $(ls *.html)"
+        fi
+
+        if ls $(params.model-name)-benchmark-*.html 1> /dev/null 2>&1; then
+          cp $(params.model-name)-benchmark-*.html "$RESULT_DIR/" 2>/dev/null || true
+          echo "Copied timestamped HTML files"
+        fi
+
+        # Copy any JSON files generated
+        if ls *.json 1> /dev/null 2>&1; then
+          cp *.json "$RESULT_DIR/"
+          echo "Copied JSON files: $(ls *.json)"
+        fi
+
+        if ls $(params.model-name)-benchmark-*.json 1> /dev/null 2>&1; then
+          cp $(params.model-name)-benchmark-*.json "$RESULT_DIR/" 2>/dev/null || true
+          echo "Copied timestamped JSON files"
+        fi
+
+        # Copy any CSV files generated
+        if ls *.csv 1> /dev/null 2>&1; then
+          cp *.csv "$RESULT_DIR/"
+          echo "Copied CSV files"
+        fi
+
+        # Copy the console output
+        if [ -f "benchmark_${TIMESTAMP}.txt" ]; then
+          cp "benchmark_${TIMESTAMP}.txt" "$RESULT_DIR/"
+          echo "Copied console output"
+        fi
+
+        # Create summary info
+        cat > "$RESULT_DIR/benchmark_info.txt" << EOF
         Model: $(params.model-name)
         Target: $(params.target)
         Processor: $(params.processor)
@@ -130,20 +233,18 @@ spec:
         Max Seconds: $(params.max-seconds)
         Timestamp: $TIMESTAMP
         EOF
-          
-          # Set timestamp for next task in pipeline
-          echo "$TIMESTAMP" > timestamp.txt
-          
-          # Package results
-          tar czf "${RESULT_DIR}_rate_$(params.rate).tar.gz" "$RESULT_DIR"
-          
-          echo "Results packaged to: ${RESULT_DIR}.tar.gz"
-          echo "Contents of workspace:"
-          ls -la
-        else
-          echo "ERROR: Benchmark output file not found: $(params.output-filename)"
-          exit 1
-        fi
+
+        # Set timestamp for next task in pipeline
+        echo "$TIMESTAMP" > timestamp.txt
+
+        # Package results
+        tar czf "${RESULT_DIR}_rate_$(params.rate).tar.gz" "$RESULT_DIR"
+
+        echo "Results packaged to: ${RESULT_DIR}_rate_$(params.rate).tar.gz"
+        echo "Contents of result directory:"
+        ls -la "$RESULT_DIR"
+        echo "Contents of workspace:"
+        ls -la
       workingDir: $(workspaces.shared-workspace.path)
   workspaces:
     - description: Shared workspace for storing benchmark results
