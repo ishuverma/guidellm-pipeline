@@ -113,10 +113,8 @@ spec:
         # Base filename without extension
         BASE_OUTPUT="$(workspaces.shared-workspace.path)/$(params.model-name)-benchmark-${TIMESTAMP}"
 
-        # Check if the rate-type parameter is equal to "throughput"
-        if [ "$(params.rate-type)" == "throughput" ]; then
-          # If it is "throughput", run the command WITHOUT the --rate argument
-          echo "Rate type is 'throughput', running without --rate flag."
+        # Run benchmark with all parameters (rate is always required)
+        echo "Running benchmark with rate-type '$(params.rate-type)' and rate '$(params.rate)'"
           COLUMNS=500 guidellm benchmark \
             --target="$(params.target)" \
             --model="$(params.model-name)" \
@@ -147,49 +145,11 @@ spec:
             --output-path="${BASE_OUTPUT}.json" \
             --rate-type="$(params.rate-type)" \
             --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "JSON generation not supported"
-        else
-          # If it is anything else, run the command WITH the --rate argument
-          echo "Rate type is '$(params.rate-type)', running with --rate flag."
-          COLUMNS=500 guidellm benchmark \
-            --target="$(params.target)" \
-            --model="$(params.model-name)" \
-            --processor="$(params.processor)" \
-            --data="$(params.data-config)" \
-            --output-path="${BASE_OUTPUT}.yaml" \
-            --rate-type="$(params.rate-type)" \
-            --rate="$(params.rate)" \
-            --max-seconds="$(params.max-seconds)" > benchmark_${TIMESTAMP}.txt
-
-          # Generate HTML report
-          echo "Generating HTML report..."
-          COLUMNS=500 guidellm benchmark \
-            --target="$(params.target)" \
-            --model="$(params.model-name)" \
-            --processor="$(params.processor)" \
-            --data="$(params.data-config)" \
-            --output-path="${BASE_OUTPUT}.html" \
-            --rate-type="$(params.rate-type)" \
-            --rate="$(params.rate)" \
-            --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "HTML generation not supported"
-
-          # Generate JSON report
-          echo "Generating JSON report..."
-          COLUMNS=500 guidellm benchmark \
-            --target="$(params.target)" \
-            --model="$(params.model-name)" \
-            --processor="$(params.processor)" \
-            --data="$(params.data-config)" \
-            --output-path="${BASE_OUTPUT}.json" \
-            --rate-type="$(params.rate-type)" \
-            --rate="$(params.rate)" \
-            --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "JSON generation not supported"
-        fi
 
         # Also copy the original output filename for backwards compatibility
         if [ -f "${BASE_OUTPUT}.yaml" ]; then
           cp "${BASE_OUTPUT}.yaml" "$(workspaces.shared-workspace.path)/$(params.output-filename)"
         fi
-        # --- End of Conditional Logic ---
 
         echo "Extracting and organizing benchmark results..."
 
