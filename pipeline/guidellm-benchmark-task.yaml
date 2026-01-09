@@ -122,6 +122,7 @@ spec:
             --data="$(params.data-config)" \
             --output-path="${BASE_OUTPUT}.yaml" \
             --rate-type="$(params.rate-type)" \
+            --rate="$(params.rate)" \
             --max-seconds="$(params.max-seconds)" > benchmark_${TIMESTAMP}.txt
 
           # Generate HTML report
@@ -133,6 +134,7 @@ spec:
             --data="$(params.data-config)" \
             --output-path="${BASE_OUTPUT}.html" \
             --rate-type="$(params.rate-type)" \
+            --rate="$(params.rate)" \
             --max-seconds="$(params.max-seconds)" >> benchmark_${TIMESTAMP}.txt 2>&1 || echo "HTML generation not supported"
 
           # Generate JSON report
